@@ -1,0 +1,184 @@
+# Lab 6 - UML, Part 2: Sequence Diagrams
+
+## Exercise 1
+
+(a) The returns are messages 3, 5 and 7.
+
+(b) `Course` must have `removeStudent(student)` (message 2) and `getCredits()` (message 4). `UndergraduateStudent` must have `removeCredits(amount)` (message 6).
+
+(c) As drawn, the service continues with messages 4, 5 and 6 even when message 3 returns `false`, so the student loses 6 credits for a course he was never enrolled in. I would add an `opt` fragment with the guard "student was enrolled" around messages 4, 5 and 6.
+
+## Exercise 2
+
+```mermaid
+sequenceDiagram
+    participant service as service: EnrollmentService
+    participant printer as printer: Printer
+    create participant enrollment as enrollment: Enrollment
+    service->>enrollment: new Enrollment(student, course)
+    service-)printer: printConfirmation(enrollment)
+```
+
+(a) The enrollment box is lower because the object is created during the scenario, so its box and lifeline start at the creation message.
+
+(b) Message 2 is asynchronous, so it is a solid line with an open arrowhead.
+
+## Exercise 3
+
+```mermaid
+sequenceDiagram
+    participant service as service: EnrollmentService
+    participant course as course: Course
+    participant lab as lab: LabSession
+    service->>course: hasLab()
+    course-->>service: has lab?
+    opt course has a lab
+        service->>lab: reserveBench(student)
+    end
+```
+
+## Exercise 4
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant service as service: EnrollmentService
+    participant course as course: Course
+    participant waitlist as waitlist: Waitlist
+    User->>service: enroll(student, course)
+    service->>course: hasSeatLeft()
+    course-->>service: seat left?
+    alt a seat is left
+        service->>course: addStudent(student)
+        service-->>User: enrolled
+    else no seat left
+        service->>waitlist: add(student)
+        service-->>User: waitlisted
+    end
+```
+
+## Exercise 5
+
+```mermaid
+sequenceDiagram
+    participant transcript as transcript: Transcript
+    participant enrollment as enrollment: Enrollment
+    loop for each enrollment of the student
+        transcript->>enrollment: getGrade()
+        enrollment-->>transcript: grade
+        transcript->>enrollment: getCredits()
+        enrollment-->>transcript: credits
+    end
+```
+
+## Exercise 6
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant service as service: EnrollmentService
+    participant course as course: Course
+    participant student as student: UndergraduateStudent
+    User->>service: enroll(student, course)
+    service->>course: getPrerequisite()
+    course-->>service: prereq
+    service->>student: hasPassed(prereq)
+    student-->>service: passed?
+    break student has not passed the prerequisite
+        service-->>User: missing prerequisite
+    end
+    service->>course: isOpen()
+    course-->>service: open?
+```
+
+## Exercise 7
+
+```mermaid
+sequenceDiagram
+    participant grades as grades: GradeService
+    participant student as student: Student
+    participant advisor as advisor: Advisor
+    par notify the student
+        grades-)student: notify(grade)
+    and notify the advisor
+        grades-)advisor: notify(grade)
+    end
+```
+
+## Exercise 8
+
+| Sentence from the requirements                                  | Fragment |
+| --------------------------------------------------------------- | -------- |
+| "For each course in the student's list, ..."                    | loop     |
+| "If the student asked for a printed timetable, also print it."  | opt      |
+| "The student pays the fees either by card or by bank transfer." | alt      |
+| "If registration is closed, refuse and stop."                   | break    |
+| "Email the student and the advisor at the same time."           | par      |
+
+## Exercise 9
+
+```mermaid
+sequenceDiagram
+    actor Registrar
+    participant service as service: WaitlistService
+    participant course as course: Course
+    participant waitlist as waitlist: Waitlist
+    Registrar->>service: promote(course, waitlist)
+    service->>course: hasSeatLeft()
+    course-->>service: seat left?
+    break no seat left
+        service-->>Registrar: undefined
+    end
+    service->>waitlist: next()
+    waitlist-->>service: next
+    break the waitlist is empty
+        service-->>Registrar: undefined
+    end
+    service->>course: addStudent(next)
+    service-->>Registrar: next
+```
+
+## Exercise 10
+
+```typescript
+enrollAll(student: Student, courses: Course[]): number {
+    let accepted = 0;
+    for (const course of courses) {
+        if (course.isOpen()) {
+            const credits = course.getCredits();
+            if (student.addCredits(credits)) {
+                accepted++;
+            }
+        }
+    }
+    return accepted;
+}
+```
+
+## Exercise 11
+
+| #   | Line of the diagram                                     | What is wrong                                                                                                                                                 | Correction                                                                                                                                                  |
+| --- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `service->>enrollment: new Enrollment(student, course)` | There is no `create participant` line before it, and the enrollment is created before the `isOpen()` check, so a closed course would still get an enrollment. | Write `create participant enrollment as enrollment: Enrollment` just before the message, and move both lines after the check, in the "course is open" path. |
+| 2   | `course-->>service: true`                               | The answer can be true or false, so the return must be labelled with a question.                                                                              | `course-->>service: open?`                                                                                                                                  |
+| 3   | `service->>course: seats = seats - 1`                   | This is not a call to an operation, it is a detail inside `Course`. The service must ask the course to take the seat.                                         | `service->>course: addStudent(student)`                                                                                                                     |
+
+Corrected diagram:
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant service as service: EnrollmentService
+    participant course as course: Course
+    User->>service: enroll(student, course)
+    service->>course: isOpen()
+    course-->>service: open?
+    alt course is open
+        service->>course: addStudent(student)
+        create participant enrollment as enrollment: Enrollment
+        service->>enrollment: new Enrollment(student, course)
+        service-->>User: enrollment
+    else course is closed
+        service-->>User: undefined
+    end
+```
